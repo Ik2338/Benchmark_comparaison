@@ -13,6 +13,9 @@
 
 using namespace std;
 
+// Nombre de rptitions pour les tests ultra-rapides (Recherche et Suppression)
+#define NUM_REPETITIONS 500000 
+
 
 // ==================================================================
 // 1) TIMER SIMPLE
@@ -23,11 +26,28 @@ public:
     void start() { startT = chrono::high_resolution_clock::now(); }
     void stop()  { endT = chrono::high_resolution_clock::now(); }
 
+    // Retourne le temps coul en ms sous forme de chane formate
     string elapsed(const string& msg) {
         double ms = chrono::duration<double, milli>(endT - startT).count();
         char buffer[100];
-        sprintf(buffer, "%.4f", ms);
+        // 4 dcimales pour l'affichage de l'insertion
+        sprintf(buffer, "%.4f", ms); 
         return msg + string(buffer) + " ms\n";
+    }
+    
+    // Retourne le temps coul en double (pour un calcul prcis de la moyenne)
+    double get_elapsed_ms() const {
+        return chrono::duration<double, milli>(endT - startT).count();
+    }
+    
+    // Retourne le temps MOYEN en ms avec 6 dcimales
+    string average_elapsed(const string& msg) const {
+        double total_ms = get_elapsed_ms();
+        double avg_ms = total_ms / NUM_REPETITIONS;
+        char buffer[100];
+        // 6 dcimales pour l'affichage du temps moyen (trs court)
+        sprintf(buffer, "%.6f", avg_ms); 
+        return msg + string(buffer) + " ms \n";
     }
 };
 
@@ -78,10 +98,10 @@ private:
 
     void fixInsert(RBNode *k) {
         RBNode *u;
-        while (k->parent->color == RED) {
+        while (k->parent && k->parent->parent && k->parent->color == RED) {
             if (k->parent == k->parent->parent->right) {
                 u = k->parent->parent->left;
-                if (u->color == RED) {
+                if (u && u->color == RED) {
                     u->color = BLACK;
                     k->parent->color = BLACK;
                     k->parent->parent->color = RED;
@@ -91,13 +111,13 @@ private:
                         k = k->parent;
                         rightRotate(k);
                     }
-                    k->parent->color = BLACK;
-                    k->parent->parent->color = RED;
-                    leftRotate(k->parent->parent);
+                    if (k->parent) k->parent->color = BLACK;
+                    if (k->parent && k->parent->parent) k->parent->parent->color = RED;
+                    if (k->parent && k->parent->parent) leftRotate(k->parent->parent);
                 }
             } else {
                 u = k->parent->parent->right;
-                if (u->color == RED) {
+                if (u && u->color == RED) {
                     u->color = BLACK;
                     k->parent->color = BLACK;
                     k->parent->parent->color = RED;
@@ -107,15 +127,16 @@ private:
                         k = k->parent;
                         leftRotate(k);
                     }
-                    k->parent->color = BLACK;
-                    k->parent->parent->color = RED;
-                    rightRotate(k->parent->parent);
+                    if (k->parent) k->parent->color = BLACK;
+                    if (k->parent && k->parent->parent) k->parent->parent->color = RED;
+                    if (k->parent && k->parent->parent) rightRotate(k->parent->parent);
                 }
             }
-            if (k == root) break;
+            if (k == root || !k->parent || !k->parent->parent || k->parent->color == BLACK) break;
         }
-        root->color = BLACK;
+        if (root) root->color = BLACK;
     }
+
 
     RBNode *searchTreeHelper(RBNode *node, char key) {
         if (node == TNULL || key == node->value) return node;
@@ -219,7 +240,7 @@ private:
             y->color = z->color;
         }
         delete z;
-        if (yOriginalColor == BLACK) fixDelete(x);
+        if (x != TNULL && yOriginalColor == BLACK) fixDelete(x);
     }
 
 public:
@@ -246,6 +267,10 @@ public:
         while (x != TNULL) {
             y = x;
             if (node->value < x->value) x = x->left;
+            else if (node->value == x->value) { 
+                 delete node;
+                 return;
+            }
             else x = x->right;
         }
 
@@ -295,7 +320,7 @@ private:
     Node* insert(Node* r, char key, T value) {
         if (!r) return new Node(key, value);
         if (key < r->key) r->left  = insert(r->left, key, value);
-        else              r->right = insert(r->right, key, value);
+        else if (key > r->key) r->right = insert(r->right, key, value);
         return r;
     }
 
@@ -331,6 +356,7 @@ private:
 public:
     void insert(char k, T v) { root = insert(root, k, v); }
     bool search(char k)      { return find(root, k); }
+    bool is_present(char k)  { return find(root, k); } // Ajout pour le test de suppression
     void removeKey(char k)   { root = removeNode(root, k); }
 };
 
@@ -340,8 +366,11 @@ public:
 // ==================================================================
 int main(int argc, char* argv[])
 {
+    // Fixer la prcision de l'affichage globalement
+    cout << fixed << setprecision(4); 
+    
     size_t COUNT = 100000000;
-    string filename = "lettres.txt";
+    string filename = "test.txt";
 
     // Arguments en ligne de commande
     if (argc > 1) filename = argv[1];
@@ -351,12 +380,12 @@ int main(int argc, char* argv[])
     Timer timer;
 
     cout << "\n+================================================+\n";
-    cout << "|   COMPARAISON DE STRUCTURES DE DONNEES        |\n";
-    cout << "|   Test avec des caracteres individuels        |\n";
+    cout << "|   COMPARAISON DE STRUCTURES DE DONNEES         |\n";
+    cout << "|   Test avec des caracteres individuels         |\n";
     cout << "+================================================+\n\n";
 
     // --------------------------------------
-    // LECTURE DU FICHIER - MODIFICATION ICI
+    // LECTURE DU FICHIER
     // --------------------------------------
     cout << ">> Lecture du fichier : " << filename << " ...";
 
@@ -372,7 +401,7 @@ int main(int argc, char* argv[])
     char c;
     size_t totalCharsRead = 0;
 
-    // MODIFICATION: Lire TOUS les caractères sans filtre
+    // Lire TOUS les caractres sans filtre
     while (chars.size() < COUNT && inputFile.get(c)) {
         chars.push_back(c);  // Garde TOUT
         totalCharsRead++;
@@ -397,211 +426,291 @@ int main(int argc, char* argv[])
     }
     cout << "\n";
 
-    // Caractères de test
+    // Caractres de test
     char testChar = chars[realCount / 2];
-    char delChar  = chars[realCount / 3];
+    char delChar  = chars[realCount / 3]; 
 
     cout << ">> Caractere de test (recherche) : '" << testChar << "' (code ASCII: " << (int)testChar << ")\n";
     cout << ">> Caractere de test (suppression) : '" << delChar << "' (code ASCII: " << (int)delChar << ")\n\n";
+    cout << ">> Recherche et Suppression mesures sur " << NUM_REPETITIONS << " rptitions.\n\n";
 
-
+    // Variable pour stocker la valeur  r-insrer pour les map/BST
+    int delCharValue = 0; 
+    
+    
     // ==================================================================
-    // TEST 1 : RED-BLACK TREE (Implementation personnalisée)
+    // TEST 1 : RED-BLACK TREE (Implementation personnalise)
     // ==================================================================
     cout << "+--------------------------------------------------+\n";
-    cout << "| TEST 1 : Red-Black Tree (Implementation Custom)  |\n";
-    cout << "+--------------------------------------------------+\n";
+    cout << " TEST 1 : Red-Black Tree (Implementation Custom)  \n\n\n";
 
     RedBlackTree rbt;
 
-    cout << "  > Insertion de " << realCount << " caracteres...";
+    cout << " > Insertion de " << realCount << " caracteres...";
     timer.start();
     for (char ch : chars) rbt.insert(ch);
     timer.stop();
-    cout << "\n    " << timer.elapsed("Temps : ");
+    cout << "\n  " << timer.elapsed("Temps : ");
 
-    cout << "\n  > Recherche du caractere '" << testChar << "'...";
+    // --- RECHERCHE RPTE ---
+    cout << " > Recherche du caractere '" << testChar << "'...";
     timer.start();
-    bool found1 = rbt.search(testChar);
+    bool found1 = false;
+    for (int i = 0; i < NUM_REPETITIONS; ++i) {
+        found1 = rbt.search(testChar); 
+    }
     timer.stop();
-    cout << "\n    Resultat : " << (found1 ? "Trouve" : "Non trouve");
-    cout << "\n    " << timer.elapsed("Temps : ");
+    
+    cout << "\n  Resultat : " << (found1 ? "Trouve" : "Non trouve");
+    cout << "\n  " << timer.average_elapsed("Temps : ");
 
-    cout << "\n  > Suppression du caractere '" << delChar << "'...";
+    // --- SUPPRESSION RPTE ---
+    cout << " > Suppression du caractere '" << delChar << "'...";
     timer.start();
-    bool removed1 = rbt.remove(delChar);
+    bool removed1 = false;
+    for (int i = 0; i < NUM_REPETITIONS; ++i) {
+        removed1 = rbt.remove(delChar);
+        if (removed1) rbt.insert(delChar); // R-insrer pour maintenir l'tat
+    }
     timer.stop();
-    cout << "\n    Resultat : " << (removed1 ? "Supprime" : "Non trouve");
-    cout << "\n    " << timer.elapsed("Temps : ");
+
+    cout << "\n  Resultat : " << (removed1 ? "Supprime" : "Non trouve");
+    cout << "\n  " << timer.average_elapsed("Temps : ");
 
 
     // ==================================================================
     // TEST 2 : std::set
     // ==================================================================
     cout << "\n\n+--------------------------------------------------+\n";
-    cout << "| TEST 2 : std::set<char> (Red-Black Tree STL)    |\n";
-    cout << "+--------------------------------------------------+\n";
+    cout << " TEST 2 : std::set<char> (Red-Black Tree STL)     \n\n\n";
 
     set<char> stlSet;
 
-    cout << "  > Insertion de " << realCount << " caracteres...";
+    cout << " > Insertion de " << realCount << " caracteres...";
     timer.start();
     for (char ch : chars) stlSet.insert(ch);
     timer.stop();
-    cout << "\n    " << timer.elapsed("Temps : ");
+    cout << "\n  " << timer.elapsed("Temps : ");
 
-    cout << "\n  > Recherche du caractere '" << testChar << "'...";
+    // --- RECHERCHE RPTE ---
+    cout << " > Recherche du caractere '" << testChar << "'...";
     timer.start();
-    auto it2 = stlSet.find(testChar);
+    auto it2 = stlSet.end();
+    for (int i = 0; i < NUM_REPETITIONS; ++i) {
+        it2 = stlSet.find(testChar);
+    }
     timer.stop();
-    cout << "\n    Resultat : " << (it2 != stlSet.end() ? "Trouve" : "Non trouve");
-    cout << "\n    " << timer.elapsed("Temps : ");
 
-    cout << "\n  > Suppression du caractere '" << delChar << "'...";
+    cout << "\n  Resultat : " << (it2 != stlSet.end() ? "Trouve" : "Non trouve");
+    cout << "\n  " << timer.average_elapsed("Temps : ");
+
+
+    // --- SUPPRESSION RPTE ---
+    cout << " > Suppression du caractere '" << delChar << "'...";
     timer.start();
-    size_t erased2 = stlSet.erase(delChar);
+    size_t erased2 = 0;
+    for (int i = 0; i < NUM_REPETITIONS; ++i) {
+        erased2 = stlSet.erase(delChar);
+        if (erased2 > 0) stlSet.insert(delChar); // R-insrer pour maintenir l'tat
+    }
     timer.stop();
-    cout << "\n    Resultat : " << (erased2 > 0 ? "Supprime" : "Non trouve");
-    cout << "\n    " << timer.elapsed("Temps : ");
+
+    cout << "\n  Resultat : " << (erased2 > 0 ? "Supprime" : "Non trouve");
+    cout << "\n  " << timer.average_elapsed("Temps : ");
 
 
     // ==================================================================
     // TEST 3 : std::unordered_set
     // ==================================================================
     cout << "\n\n+--------------------------------------------------+\n";
-    cout << "| TEST 3 : std::unordered_set<char> (Hash Table)  |\n";
-    cout << "+--------------------------------------------------+\n";
+    cout << " TEST 3 : std::unordered_set<char> (Hash Table)   \n\n\n";
 
     unordered_set<char> uSet;
 
-    cout << "  > Insertion de " << realCount << " caracteres...";
+    cout << " > Insertion de " << realCount << " caracteres...";
     timer.start();
     for (char ch : chars) uSet.insert(ch);
     timer.stop();
-    cout << "\n    " << timer.elapsed("Temps : ");
+    cout << "\n  " << timer.elapsed("Temps : ");
 
-    cout << "\n  > Recherche du caractere '" << testChar << "'...";
+    // --- RECHERCHE RPTE ---
+    cout << " > Recherche du caractere '" << testChar << "'...";
     timer.start();
-    auto it3 = uSet.find(testChar);
+    auto it3 = uSet.end();
+    for (int i = 0; i < NUM_REPETITIONS; ++i) {
+        it3 = uSet.find(testChar);
+    }
     timer.stop();
-    cout << "\n    Resultat : " << (it3 != uSet.end() ? "Trouve" : "Non trouve");
-    cout << "\n    " << timer.elapsed("Temps : ");
 
-    cout << "\n  > Suppression du caractere '" << delChar << "'...";
+    cout << "\n  Resultat : " << (it3 != uSet.end() ? "Trouve" : "Non trouve");
+    cout << "\n  " << timer.average_elapsed("Temps : ");
+
+
+    // --- SUPPRESSION RPTE ---
+    cout << " > Suppression du caractere '" << delChar << "'...";
     timer.start();
-    size_t erased3 = uSet.erase(delChar);
+    size_t erased3 = 0;
+    for (int i = 0; i < NUM_REPETITIONS; ++i) {
+        erased3 = uSet.erase(delChar);
+        if (erased3 > 0) uSet.insert(delChar); // R-insrer pour maintenir l'tat
+    }
     timer.stop();
-    cout << "\n    Resultat : " << (erased3 > 0 ? "Supprime" : "Non trouve");
-    cout << "\n    " << timer.elapsed("Temps : ");
+
+    cout << "\n  Resultat : " << (erased3 > 0 ? "Supprime" : "Non trouve");
+    cout << "\n  " << timer.average_elapsed("Temps : ");
 
 
     // ==================================================================
     // TEST 4 : std::map
     // ==================================================================
     cout << "\n\n+--------------------------------------------------+\n";
-    cout << "| TEST 4 : std::map<char, int> (Red-Black Tree)   |\n";
-    cout << "+--------------------------------------------------+\n";
+    cout << " TEST 4 : std::map<char, int> (Red-Black Tree)    \n\n\n";
 
     map<char, int> stlMap;
 
-    cout << "  > Insertion de " << realCount << " caracteres...";
+    cout << " > Insertion de " << realCount << " caracteres...";
     timer.start();
-    for (size_t i = 0; i < realCount; ++i)
+    for (size_t i = 0; i < realCount; ++i) {
         stlMap[chars[i]] = i;
+    }
     timer.stop();
-    cout << "\n    " << timer.elapsed("Temps : ");
-
-    cout << "\n  > Recherche du caractere '" << testChar << "'...";
+    cout << "\n  " << timer.elapsed("Temps : ");
+    
+    // Rcuprer la valeur  r-insrer pour la map
+    auto it_del_map = stlMap.find(delChar);
+    if (it_del_map != stlMap.end()) delCharValue = it_del_map->second;
+    else delCharValue = -1; 
+    
+    // --- RECHERCHE RPTE ---
+    cout << " > Recherche du caractere '" << testChar << "'...";
     timer.start();
-    auto it4 = stlMap.find(testChar);
+    auto it4 = stlMap.end();
+    for (int i = 0; i < NUM_REPETITIONS; ++i) {
+        it4 = stlMap.find(testChar);
+    }
     timer.stop();
-    cout << "\n    Resultat : " << (it4 != stlMap.end() ? "Trouve" : "Non trouve");
-    cout << "\n    " << timer.elapsed("Temps : ");
 
-    cout << "\n  > Suppression du caractere '" << delChar << "'...";
+    cout << "\n  Resultat : " << (it4 != stlMap.end() ? "Trouve" : "Non trouve");
+    cout << "\n  " << timer.average_elapsed("Temps : ");
+
+
+    // --- SUPPRESSION RPTE ---
+    cout << " > Suppression du caractere '" << delChar << "'...";
     timer.start();
-    size_t erased4 = stlMap.erase(delChar);
+    size_t erased4 = 0;
+    for (int i = 0; i < NUM_REPETITIONS; ++i) {
+        erased4 = stlMap.erase(delChar);
+        if (erased4 > 0 && delCharValue != -1) stlMap[delChar] = delCharValue; // R-insrer pour maintenir l'tat
+    }
     timer.stop();
-    cout << "\n    Resultat : " << (erased4 > 0 ? "Supprime" : "Non trouve");
-    cout << "\n    " << timer.elapsed("Temps : ");
+
+    cout << "\n  Resultat : " << (erased4 > 0 ? "Supprime" : "Non trouve");
+    cout << "\n  " << timer.average_elapsed("Temps : ");
 
 
     // ==================================================================
     // TEST 5 : std::unordered_map
     // ==================================================================
     cout << "\n\n+--------------------------------------------------+\n";
-    cout << "| TEST 5 : std::unordered_map<char, int>          |\n";
-    cout << "+--------------------------------------------------+\n";
+    cout << " TEST 5 : std::unordered_map<char, int>           \n\n\n";
 
     unordered_map<char, int> uMap;
 
-    cout << "  > Insertion de " << realCount << " caracteres...";
+    cout << " > Insertion de " << realCount << " caracteres...";
     timer.start();
-    for (size_t i = 0; i < realCount; ++i)
+    for (size_t i = 0; i < realCount; ++i) {
         uMap[chars[i]] = i;
+    }
     timer.stop();
-    cout << "\n    " << timer.elapsed("Temps : ");
-
-    cout << "\n  > Recherche du caractere '" << testChar << "'...";
+    cout << "\n  " << timer.elapsed("Temps : ");
+    
+    // --- RECHERCHE RPTE ---
+    cout << " > Recherche du caractere '" << testChar << "'...";
     timer.start();
-    auto it5 = uMap.find(testChar);
+    auto it5 = uMap.end();
+    for (int i = 0; i < NUM_REPETITIONS; ++i) {
+        it5 = uMap.find(testChar);
+    }
     timer.stop();
-    cout << "\n    Resultat : " << (it5 != uMap.end() ? "Trouve" : "Non trouve");
-    cout << "\n    " << timer.elapsed("Temps : ");
 
-    cout << "\n  > Suppression du caractere '" << delChar << "'...";
+    cout << "\n  Resultat : " << (it5 != uMap.end() ? "Trouve" : "Non trouve");
+    cout << "\n  " << timer.average_elapsed("Temps : ");
+
+
+    // --- SUPPRESSION RPTE ---
+    cout << " > Suppression du caractere '" << delChar << "'...";
     timer.start();
-    size_t erased5 = uMap.erase(delChar);
+    size_t erased5 = 0;
+    for (int i = 0; i < NUM_REPETITIONS; ++i) {
+        erased5 = uMap.erase(delChar);
+        if (erased5 > 0 && delCharValue != -1) uMap[delChar] = delCharValue; // R-insrer pour maintenir l'tat
+    }
     timer.stop();
-    cout << "\n    Resultat : " << (erased5 > 0 ? "Supprime" : "Non trouve");
-    cout << "\n    " << timer.elapsed("Temps : ");
+
+    cout << "\n  Resultat : " << (erased5 > 0 ? "Supprime" : "Non trouve");
+    cout << "\n  " << timer.average_elapsed("Temps : ");
 
 
     // ==================================================================
     // TEST 6 : Arbre Binaire Simple
     // ==================================================================
     cout << "\n\n+--------------------------------------------------+\n";
-    cout << "| TEST 6 : Arbre Binaire Simple (BST)             |\n";
-    cout << "+--------------------------------------------------+\n";
+    cout << " TEST 6 : Arbre Binaire Simple (BST)              \n\n\n";
 
     BinaryTree<int> bt;
 
-    cout << "  > Insertion de " << realCount << " caracteres...";
+    cout << " > Insertion de " << realCount << " caracteres...";
     timer.start();
-    for (size_t i = 0; i < realCount; ++i)
+    for (size_t i = 0; i < realCount; ++i) {
         bt.insert(chars[i], i);
+    }
     timer.stop();
-    cout << "\n    " << timer.elapsed("Temps : ");
-
-    cout << "\n  > Recherche du caractere '" << testChar << "'...";
+    cout << "\n  " << timer.elapsed("Temps : ");
+    
+    // --- RECHERCHE RPTE ---
+    cout << " > Recherche du caractere '" << testChar << "'...";
     timer.start();
-    bool found6 = bt.search(testChar);
+    bool found6 = false;
+    for (int i = 0; i < NUM_REPETITIONS; ++i) {
+        found6 = bt.search(testChar);
+    }
     timer.stop();
-    cout << "\n    Resultat : " << (found6 ? "Trouve" : "Non trouve");
-    cout << "\n    " << timer.elapsed("Temps : ");
 
-    cout << "\n  > Suppression du caractere '" << delChar << "'...";
+    cout << "\n  Resultat : " << (found6 ? "Trouve" : "Non trouve");
+    cout << "\n  " << timer.average_elapsed("Temps : ");
+
+
+    // --- SUPPRESSION RPTE ---
+    // La suppression dans le BST est spciale (pas de boolen retourn)
+    cout << " > Suppression du caractere '" << delChar << "'...";
     timer.start();
-    bt.removeKey(delChar);
+    for (int i = 0; i < NUM_REPETITIONS; ++i) {
+        bool present = bt.is_present(delChar); // Vrifier s'il est l avant de supprimer
+        if (present) { 
+            bt.removeKey(delChar);
+            if (delCharValue != -1) bt.insert(delChar, delCharValue); // R-insrer pour l'tape suivante
+        }
+    }
     timer.stop();
-    cout << "\n    " << timer.elapsed("Temps : ");
+
+    cout << "\n  Resultat : Supprime (si trouv)";
+    cout << "\n  " << timer.average_elapsed("Temps : ");
 
 
     // ==================================================================
     // STATISTIQUES FINALES
     // ==================================================================
     cout << "\n\n+================================================+\n";
-    cout << "|           STATISTIQUES FINALES                 |\n";
-    cout << "+================================================+\n\n";
+    cout << "             STATISTIQUES FINALES               \n\n\n";
 
-    cout << "  Caracteres TOTAUX lus               : " << realCount << "\n";
-    cout << "  Caracteres uniques dans std::set    : " << stlSet.size() << "\n";
-    cout << "  Caracteres uniques dans unordered_set : " << uSet.size() << "\n";
-    cout << "  Caracteres uniques dans map         : " << stlMap.size() << "\n";
-    cout << "  Caracteres uniques dans unordered_map : " << uMap.size() << "\n";
+    cout << " Caracteres TOTAUX lus        : " << realCount << "\n";
+    cout << " Caracteres uniques dans std::set  : " << stlSet.size() << "\n";
+    cout << " Caracteres uniques dans unordered_set : " << uSet.size() << "\n";
+    cout << " Caracteres uniques dans map     : " << stlMap.size() << "\n";
+    cout << " Caracteres uniques dans unordered_map : " << uMap.size() << "\n";
 
     cout << "\n+================================================+\n";
-    cout << "|             BENCHMARK TERMINE                  |\n";
+    cout << "|              BENCHMARK TERMINE                 |\n";
     cout << "+================================================+\n\n";
 
     return 0;
